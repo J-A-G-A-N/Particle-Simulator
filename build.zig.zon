@@ -1,0 +1,43 @@
+.{
+    .name = "Particle-simulation",
+    .version = "0.0.0",
+    .dependencies = .{
+                .@"sdl2-prebuilt-macos" = .{
+            .url = "https://github.com/zig-gamedev/sdl2-prebuilt-macos/archive/f14773fa3de719b3a399b854c31eb4139d63842f.tar.gz",
+            .hash = "12205cb2da6fb4a7fcf28b9cd27b60aaf12f4d4a55be0260b1ae36eaf93ca5a99f03",
+            .lazy = true,
+        },
+        .@"sdl2-prebuilt-x86_64-windows-gnu" = .{
+            .url = "https://github.com/zig-gamedev/sdl2-prebuilt-x86_64-windows-gnu/archive/8143e2a5c28dbace399cbff14c3e8749a1afd418.tar.gz",
+            .hash = "1220ade6b84d06d73bf83cef22c73ec4abc21a6d50b9f48875f348b7942c80dde11b",
+            .lazy = true,
+        },
+        .@"sdl2-prebuilt-x86_64-linux-gnu" = .{
+            .url = "https://github.com/zig-gamedev/sdl2-prebuilt-x86_64-linux-gnu/archive/2eccc574ad909b0d00b694b10c217a95145c47af.tar.gz",
+            .hash = "12200ecb91c0596d0356ff39d573af83abcd44fecb27943589f11c2cd172763fea39",
+            .lazy = true,
+        },
+        .zsdl = .{
+            .url = "https://github.com/zig-gamedev/zsdl/archive/9635e2f996e86cd46ce939752b7a8c47f9883b9e.tar.gz",
+             .hash = "1220a5251c77af0d18c54ab1754fb0a296b9e4894b544b365c3e3da3c661b3b6f2aa",
+        },
+
+        // .zsdl = .{
+        //     .path = "deps/zsdl",
+        // },
+        .ztracy =.{
+            .path = "deps/ztracy"
+        },
+        .zmath = .{
+            .path = "deps/zmath",
+        },
+        .zopengl = .{
+            .path =  "deps/zopengl",
+        }
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
