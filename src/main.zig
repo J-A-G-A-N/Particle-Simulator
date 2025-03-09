@@ -19,10 +19,10 @@ var bg_flip:bool = false;
 //1366x768
 var flags:Flags = .{
     .WINDOW_HEIGHT = 720,
-    .WINDOW_WIDTH = 1200,
+    .WINDOW_WIDTH = 720,
     .TARGET_FPS = 60,
     .PARTICLE_RADIUS = 4,
-    .PARTICLE_COUNT = 8000,
+    .PARTICLE_COUNT = 800,
     .DAMPING_FACTOR = 0.1,
     .PARTICLE_COLLISION_DAMPING = 1,
     .GRID_SIZE = 16,
@@ -119,9 +119,9 @@ pub fn updateAndRender() !void {
     
         // Set Background
     if(bg_flip == true){
-        try R.clearBackground(colors.Black);
-    }else{
         try R.clearBackground(colors.Raywhite);
+    }else{
+        try R.clearBackground(colors.Black);
     }
 
     try R.render_circles_texture_2d(texture_2D, .{.X = particles.positions.x, .Y = particles.positions.y, .color = particles.colors},flags.PARTICLE_RADIUS);
