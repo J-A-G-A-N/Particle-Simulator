@@ -22,22 +22,34 @@
              .hash = "1220a5251c77af0d18c54ab1754fb0a296b9e4894b544b365c3e3da3c661b3b6f2aa",
         },
 
-        // .zsdl = .{
-        //     .path = "deps/zsdl",
-        // },
-        .ztracy =.{
-            .path = "deps/ztracy"
+        .ztracy = .{
+            .url = "https://github.com/zig-gamedev/ztracy/archive/5af60074f355ecda6114d08dcc8c931c3d163c94.tar.gz",
+            .hash = "1220293b509e9238e43828b00ee18e38eeace190ef844b74bf54e3db6e7da7398f4b",
         },
+
+
+        
         .zmath = .{
-            .path = "deps/zmath",
+            .url = "https://github.com/zig-gamedev/zmath/archive/24cdd20f9da09bd1ce7b552907eeaba9bafea59d.tar.gz",
+            .hash = "1220081d55b58b968d953db1afc2fb01b2f5733929144e69522461ce25fa6450d84e",
         },
+   
+
+
         .zopengl = .{
-            .path =  "deps/zopengl",
-        }
+            .url = "https://github.com/zig-gamedev/zopengl/archive/c9c293a9af388478bca0ad52007a72372ef71747.tar.gz",
+            .hash = "1220c030f5e33e09bd80fe7a7b064b65e1fc02e9bbf603ba04716866c9f1ca16f8ce",
+        },
+
+
     },
     .paths = .{
         "build.zig",
         "build.zig.zon",
+        "README.md",
+        "resources",
+        ".gitignore",
+        ".zigversion",
         "src",
     },
 }
