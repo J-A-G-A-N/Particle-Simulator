@@ -10,7 +10,7 @@ pub const Gird_collision_handler  = struct {
     num_y:u32,
     grid_size:f32,
     flags:*Flags,
-    grid_array:[]u32,
+    grid_array:[]u8,
     start_array:[]u32,
     sorted_array:[]u32,
     collision_pairs:std.ArrayList([2]usize),
@@ -26,7 +26,7 @@ pub const Gird_collision_handler  = struct {
             .grid_size = flags.*.GRID_SIZE,
             .collision_pairs = std.ArrayList([2]usize).init(allocator),
             .flags = flags,
-            .grid_array = try allocator.alloc(u32,@as(usize,@intCast(num_x * num_y + 1))),
+            .grid_array = try allocator.alloc(u8,@as(usize,@intCast(num_x * num_y + 1))),
             .start_array = try allocator.alloc(u32,@as(usize,@intCast(num_x * num_y + 1))),
             .sorted_array = try allocator.alloc(u32,@as(usize,@intCast(particles.*.len))),
             .particles = particles,
@@ -86,6 +86,7 @@ pub const Gird_collision_handler  = struct {
             }
             self.grid_array[index] += 1;
         }
+
        }
 
     
@@ -93,8 +94,9 @@ pub const Gird_collision_handler  = struct {
      pub fn update_start_array(self: *@This())void{
         self.start_array[0] = 0;
         for(1..self.grid_array.len)|i|{
-            self.start_array[i] = self.start_array[i - 1]  + self.grid_array[i - 1];   
+            self.start_array[i] = self.start_array[i - 1]  + @as(u32,self.grid_array[i - 1]);   
         }
+       // std.debug.print("{any}\n", .{self.start_array});
        }
         
     //  Sorts the particles index
@@ -131,27 +133,57 @@ pub const Gird_collision_handler  = struct {
     defer detectCollisionsZone.End();
 
     self.collision_pairs.clearRetainingCapacity();
-
+    var particle_i:usize = 0; 
     for (1..(self.num_x - 1)) |x| {  
         for (0..self.num_y) |y| {
             const grid_index = x * self.num_y + y;
             const start_index = self.start_array[grid_index];
             const end_index = if (grid_index + 1 < self.num_x * self.num_y) self.start_array[grid_index + 1] else self.particles.*.len;
-
+            //std.debug.print("({},{})\n", .{start_index,end_index}); 
+            //if (start_index == end_index) continue;
             if (start_index >= end_index) continue;
 
             for (start_index..end_index) |i| {
-                const particlei = self.sorted_array[i];
+                particle_i = self.sorted_array[i];
+                
+                
+        const Neighbor_offsets = [_][2]i32{ .{0, 0}, .{1, 0}, .{1, 1}, .{0, 1}, .{-1, 1} };
+    
 
-                // for (i + 1..end_index) |j| {
-                //     const particlej = self.sorted_array[j];
-                //     if (self.particles.*.check_collision(particlei, particlej)) {
-                //         // Store collision pair
-                //         collision_pairs.append([2]usize{ particlei, particlej }) catch unreachable;
-                //     }
-                // }
+        // const Neighbor_offsets = [_][2] i32{
+        //     .{-1,-1}, .{-1,0}, .{-1,1},
+        //     .{0,-1},  .{0,0},       .{0,1},
+        //     .{1,-1}, .{1,0},  .{1,1},
+        // };
 
-                self.check_neighboring_cells(particlei, grid_index, &self.collision_pairs);
+
+        const grid_x = grid_index / self.num_y;
+        const grid_y = grid_index % self.num_y;
+
+        for (Neighbor_offsets) |offset| {
+            const dx = offset[0];
+            const dy = offset[1];
+
+            const nx = @as(i32,@intCast(grid_x)) + dx;
+            const ny = @as(i32,@intCast(grid_y)) + dy;
+
+            if (nx < 0 or nx >= self.num_x or ny < 0 or ny >= self.num_y) continue;
+
+            const neighboring_grid = @as(usize,@intCast(nx)) * self.num_y + @as(usize,@intCast(ny));
+            const start_idx = self.start_array[neighboring_grid];
+            const end_idx = if (neighboring_grid + 1 < self.num_x * self.num_y) self.start_array[neighboring_grid + 1] else self.particles.*.len;
+
+            for (start_idx..end_idx) |j| {
+                const particle_j = self.sorted_array[j];
+
+                if (particle_i == particle_j) continue;
+
+                if (self.particles.*.check_collision(particle_i, particle_j)) {
+                    // Store collision pair instead of resolving immediately
+                    self.collision_pairs.append([2]usize{ particle_i, particle_j }) catch unreachable;
+                }
+            }
+        }
             }
         }
     }
@@ -162,158 +194,5 @@ pub const Gird_collision_handler  = struct {
     }
 }
     
-    pub fn check_neighboring_cells(self: *@This(), particle_i: usize, grid_index: usize, collision_pairs: *std.ArrayList([2]usize)) void {
-    const Neighbor_offsets = [_][2] i32{
-        .{-1,-1}, .{-1,0}, .{-1,1},
-        .{0,-1},  .{0,0},       .{0,1},
-        .{1,-1}, .{1,0},  .{1,1},
-    };
-
-    const grid_x = grid_index / self.num_y;
-    const grid_y = grid_index % self.num_y;
-
-    for (Neighbor_offsets) |offset| {
-        const dx = offset[0];
-        const dy = offset[1];
-
-        const nx = @as(i32,@intCast(grid_x)) + dx;
-        const ny = @as(i32,@intCast(grid_y)) + dy;
-
-        if (nx < 0 or nx >= self.num_x or ny < 0 or ny >= self.num_y) continue;
-
-        const neighboring_grid = @as(usize,@intCast(nx)) * self.num_y + @as(usize,@intCast(ny));
-        const start_index = self.start_array[neighboring_grid];
-        const end_index = if (neighboring_grid + 1 < self.num_x * self.num_y) self.start_array[neighboring_grid + 1] else self.particles.*.len;
-
-        for (start_index..end_index) |j| {
-            const particle_j = self.sorted_array[j];
-            if (particle_i == particle_j) continue;
-            if (self.particles.*.check_collision(particle_i, particle_j)) {
-                // Store collision pair instead of resolving immediately
-                collision_pairs.append([2]usize{ particle_i, particle_j }) catch unreachable;
-            }
-        }
-    }
-}
-
-
-    //instead of resolving imedeately get all the pairs of collisons and then resolve
-
-//     pub fn detect_collisions(self: *@This()) void {
-//
-//         const detectCollisionsZone = ztracy.ZoneNC(@src(), "detect_collisions", 0xff_00_ff); 
-//         defer detectCollisionsZone.End();
-//
-//         // Skip leftmost and rightmost columns
-//         for (1..(self.num_x - 1)) |x| {  
-//             for (0..self.num_y) |y| {
-//                 const grid_index = x * self.num_y + y;
-//
-//                 const start_index = self.start_array[grid_index];
-//                 const end_index = if (grid_index + 1 < self.num_x * self.num_y) self.start_array[grid_index + 1] else self.particles.*.len;
-//
-//                 if (start_index >= end_index) continue;
-//
-//                 for (start_index..end_index) |i| {
-//                     const particlei = self.sorted_array[i];
-//
-//                     for (i + 1..end_index) |j| {
-//                         const particlej = self.sorted_array[j];
-//                         if (self.particles.*.check_collision(particlei, particlej)) {
-//                             self.particles.*.resolve_collision(particlei, particlej);
-//                         }
-//                     }
-//                     self.check_neighboring_cells(particlei, grid_index);
-//                 }
-//             }
-//         }
-// }
-
-    // pub fn detect_collisions(self:*@This()) void {
-    //     const detect_collisions_ztracy_zone = ztracy.ZoneNC(@src(),"detect_collisions",0xff_00_ff); 
-    //     defer  detect_collisions_ztracy_zone.End();
-    //     //debug("detect_collisions",.{});
-    //
-    //     for (0..(self.num_x * self.num_y)) |grid_index| {
-    //         //const start_index = if (grid_index == 0) 0 else self.start_array[grid_index - 1];
-    //
-    //         //const end_index = self.start_array[grid_index];
-    //          const start_index = self.start_array[grid_index];
-    //          const end_index = if (grid_index + 1 < self.num_x * self.num_y) self.start_array[grid_index + 1] else self.particles.*.len;
-    //
-    //         if (start_index >= end_index)continue ;
-    //         for (start_index..end_index)|i|{
-    //             const Particle_i = self.sorted_array[i];
-    //
-    //
-    //             inline for (i+1..end_index)|j|{
-    //                 const Particle_j = self.sorted_array[j];
-    //                 // debug("particles_indices : ({d},{d})", .{Particle_i,Particle_j});
-    //                 // debug("gird_index : {d}",.{grid_index});
-    //                 if (self.particles.*.check_collision(Particle_i,Particle_j)){
-    //                     self.particles.*.resolve_collision(Particle_i,Particle_j);
-    //                 }
-    //             }
-    //             self.check_neighboring_cells(Particle_i,grid_index);
-    //         }
-    //     }
-    // }
-
-    // pub fn check_neighboring_cells(self:*@This(),particle_i:usize,grid_index:usize)void{
-    //
-    //     //debug("check_neighoring_cells",.{});
-    //    const Neighbor_offsets = [_][2] i32{
-    //         .{-1,-1}, .{-1,0}, .{-1,1},
-    //         .{0,-1},          .{0,1},
-    //         .{1,-1}, .{1,0},  .{1,1},
-    //    };
-    //         
-    //    const grid_x = grid_index / self.num_y;
-    //    const grid_y = grid_index % self.num_y;
-    //
-    //    for (Neighbor_offsets)|offset|{
-    //        const dx = offset[0];
-    //        const dy = offset[1];
-    //
-    //        const nx = @as(i32,@intCast(grid_x)) + dx;
-    //        const ny = @as(i32,@intCast(grid_y)) + dy;
-    //       
-    //        if (nx < 0 or nx >= self.num_x or ny < 0 or ny >= self.num_y)continue;
-    //
-    //
-    //        const neighouring_gird = @as(usize,@intCast(nx)) * self.num_y + @as(usize,@intCast(ny));
-    //        const start_index = if (neighouring_gird == 0) 0 else self.start_array[neighouring_gird - 1];
-    //        const end_index = self.start_array[neighouring_gird];
-    //
-    //        for (start_index..end_index)|j|{
-    //            const particle_j = self.sorted_array[j];
-    //
-    //
-    //            if (self.particles.*.check_collision(particle_i,particle_j)){
-    //                 self.particles.*.resolve_collision(particle_i,particle_j);
-    //            }
-    //        }
-    //    }
-    //
-    // }
-    // pub fn  drawGrid(self:*@This(),) void {
-    //     // Draw vertical lines
-    //     const num_x:usize = @intCast(self.num_x);
-    //     const num_y:usize = @intCast(self.num_y);
-    //     const grid_size:f32 =   self.grid_size;
-    //     for (0..num_x + 1) |i| {
-    //         const x = @as(f32, @floatFromInt(i)) * grid_size;
-    //         rl.drawLineV(rl.Vector2{ .x = x, .y = 0 }, rl.Vector2{ .x = x, .y =
-    //             @as(f32,@floatFromInt(num_y)) * grid_size }, rl.Color.gray);
-    //     }
-    //
-    //     // Draw horizontal lines
-    //     for (0..num_x + 1) |j| {
-    //         const y = @as(f32, @floatFromInt(j)) * grid_size;
-    //         rl.drawLineV(rl.Vector2{ .x = 0, .y = y }, rl.Vector2{ .x =
-    //             @as(f32,@floatFromInt( num_x )) * grid_size, .y = y }, rl.Color.gray);
-    //     }
-    // } 
-    // 
 };
 

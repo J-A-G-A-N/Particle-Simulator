@@ -8,11 +8,11 @@ const Boundary = @import("solver/boundary.zig").Boundary;
 const  Gird_collision_handler = @import("collision_handler.zig").Gird_collision_handler;
 
 ////////////////////////////
-/// TODO: Update the spawn to check for the boundry flags once created
 /// TODO: move the partice's update_positions to a solver inerface
 ////////////////////////////
 
-const vel:f32 = 500;
+const vel:f32 = 200;
+
 
 pub const Particles = struct {
     positions: vec2,
@@ -45,32 +45,35 @@ pub const Particles = struct {
     fn random_u8(rng: *std.Random, min: u8, max: u8) u8 {
     return @as(u8, rng.intRangeAtMost(u8, min, max));
 }
-
+    var hue:f32 = 0;
     pub fn initialize_particles(particles: *Particles) void {
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.nanoTimestamp()));
 
         var rng = prng.random();
         @memset(particles.*.positions.x, 0);
         @memset(particles.*.positions.y, 0);
+        //var counter:u32 = 1 ;
+        //const N:usize = 100;
         for (0..particles.*.len) |i| {
             particles.*.radius[i] = particles.*.flags.*.PARTICLE_RADIUS;
             particles.*.colors[i] = colors.Red;
-            // Take rng in spwan particles and make it a seperate file and implement
-            // particles.*.velocities.x[i] = @as(f32, @floatFromInt(rl.getRandomValue(-500, 500)));
-            // particles.*.velocities.y[i] = @as(f32, @floatFromInt(rl.getRandomValue(-500, 500)));
+            if (particles.flags.*.IF_GRAVITY){
+            particles.*.velocities.x[i] = random_float_clamped_gen(&rng, -vel*0.5,vel*0.5);
+            particles.*.velocities.y[i] = 0;
+
+            }
             particles.*.velocities.x[i] = random_float_clamped_gen(&rng, -vel,vel);
             particles.*.velocities.y[i] = random_float_clamped_gen(&rng, -vel,vel);
-            particles.update_particles_colors();
-            //particles.*.colors[i] = getColor(@as(f32,@floatFromInt(i)));
-            //const hue: f32 = random_float_clamped_gen(&rng, 0, 360.0); // Full spectrum
-            //particles.*.colors[i] = hsvToRgb(hue, 0.8, 0.8);
-            //particles.update_particles_colors();
-                       // particles.*.colors[i] =  .{
-            //     .r  =  random_u8(&rng, 0,255),
-            //     .g  =  random_u8(&rng, 0,255),
-            //     .b  =  random_u8(&rng, 0,255),
-            //     .a  =  255,
-            // };
+
+            //particles.update_particles_colors(); // Jet Color
+
+            particles.*.colors[i] = getColor(@as(f32,@floatFromInt(i)));
+
+             // Full spectrum
+            //const hue: f32 = @as(f32,@floatFromInt(counter)); // Full spectrum
+            // if (i / N == 100) counter += 1;  hue = random_float_clamped_gen(&rng, 0, 360.0);
+            // particles.*.colors[i] = hsvToRgb(hue, 1, 1);
+
         }
     }
    
@@ -108,9 +111,9 @@ pub const Particles = struct {
 
     
     fn getColor(t: f32) sdl.Color {
-    const r = @sin(t);
-    const g = @sin(t + 0.33 * 2.0 * std.math.pi);
-    const b = @sin(t + 0.66 * 2.0 * std.math.pi);
+    const r = (@sin(t) * 0.5) + 0.5;
+    const g = (@sin(t + 0.33 * 2.0 * std.math.pi) * 0.5 ) + 0.5;
+    const b = (@sin(t + 0.66 * 2.0 * std.math.pi) * 0.5 ) + 0.5;
 
     return .{
         .r = @as(u8, @intFromFloat(255.0 * r * r)),
@@ -147,9 +150,10 @@ pub const Particles = struct {
         const acc_x:f32 = 0;
         var acc_y:f32 = 0;
         if (self.flags.*.IF_GRAVITY == true){
-            acc_y = 500;
+            acc_y = 200;
         }
         const delta_T: f32 = 0.008;
+        //const delta_T: f32 = 0.016;
         const substeps: u8 = 8;
         const dt = delta_T / @as(f32, @floatFromInt(substeps));
         for (0..substeps) |_| {
@@ -159,30 +163,32 @@ pub const Particles = struct {
             gch.update_start_array();
             try gch.update_sorted_array();
             gch.detect_collisions();
-            self.update_particles_colors();
+            //self.update_particles_colors();
                 for (0..self.len) |i| {
                 
                 self.velocities.x[i] += acc_x * dt;
                 self.velocities.y[i] += acc_y * dt;
+
 
                 self.positions.x[i] += self.velocities.x[i] * dt;
                 self.positions.y[i] += self.velocities.y[i] * dt;
             }
         }
     }
-
-    pub fn get_distance(self: *@This(), i: usize, j: usize) f32 {
+    
+    pub fn get_distance_squared(self: *@This(), i: usize, j: usize) f32 {
         const dx_2 = ( self.positions.x[i] -  self.positions.x[j]) * ( self.positions.x[i] -  self.positions.x[j]);
         const dy_2 = ( self.positions.y[i] - self.positions.y[j]) * ( self.positions.y[i] - self.positions.y[j]);
 
-        return std.math.sqrt(dx_2 + dy_2);
+        return dx_2 + dy_2;
     }
 
     pub fn check_collision(self: *@This(), i: usize, j: usize) bool {
-        //std.log.debug("check_collision",.{});
-        const distance: f32 = self.get_distance(i, j);
-        const sum_of_radii = self.radius[i] + self.radius[j];
-        if (distance <= sum_of_radii) {
+
+    
+        const distance_sqared = self.get_distance_squared(i, j);
+        const sum_of_radii_squared = (self.radius[i] + self.radius[j] ) * ( self.radius[i] + self.radius[j]);
+        if (distance_sqared <= sum_of_radii_squared){
             return true;
         }
         return false;
@@ -200,17 +206,15 @@ pub const Particles = struct {
 
     pub fn resolve_collision(self: *@This(), i: usize, j: usize) void {
 
-        //std.log.debug("resolve_collision",.{});
-        const distance = self.get_distance(i, j);
+        const distance = std.math.sqrt(self.get_distance_squared(i, j));
         if ( distance < 0.001 ) return;
         var normal_vector_x:f32 = 0 ;
         var normal_vector_y:f32 = 0 ;
-        const mass_i = 0.1;
-        const mass_j = 0.1;
+        const mass_i = 2;
+        const mass_j = 2;
         normal_vector_x = (self.positions.x[j] - self.positions.x[i]) / distance;
         normal_vector_y = (self.positions.y[j] - self.positions.y[i]) / distance;
 
-        //const p_value = 2 * (self.dot_produtct(i, normal_vector_x,normal_vector_y) - self.dot_produtct(j, normal_vector_x,normal_vector_y)) / (mass_i + mass_j);
 
 
         const rel_vel_x = self.velocities.x[j] - self.velocities.x[i];
@@ -222,11 +226,7 @@ pub const Particles = struct {
 
 
         const k = - (1 + self.flags.*.PARTICLE_COLLISION_DAMPING) * vel_along_normal / (inv_mass_i + inv_mass_j);
-        // const new_velocity_i_x = self.velocities.x[i] - p_value * normal_vector_x * mass_i ;
-        // const new_velocity_i_y = self.velocities.y[i] - p_value * normal_vector_y * mass_i ; 
-        //
-        // const new_velocity_j_x = self.velocities.x[j] + p_value * normal_vector_x * mass_j ; 
-        // const new_velocity_j_y = self.velocities.y[j] + p_value * normal_vector_y * mass_j ;
+
         const min_distance = self.radius[i] + self.radius[j] ;
         const overlap = min_distance - distance;
         if (overlap > 0) {
@@ -248,42 +248,10 @@ pub const Particles = struct {
         self.velocities.x[j] += normal_vector_x * k * inv_mass_j;
         self.velocities.y[j] += normal_vector_y * k * inv_mass_j;
         
-            
-
-        // self.velocities.x[i] = new_velocity_i_x ;
-        // self.velocities.y[i] = new_velocity_i_y ;
-        //
-        // self.velocities.x[j] = new_velocity_j_x ;
-        // self.velocities.y[j] = new_velocity_j_y ;
-        // const overlap = ( min_distance - distance) ; 
-        // if (overlap > 0 ){
-        //     const correction_factor_i = overlap * 0.5;
-        //     const correction_factor_j = overlap * 0.5;
-        //     self.positions.x[i] -= normal_vector_x * correction_factor_i; 
-        //     self.positions.y[i] -= normal_vector_y * correction_factor_i; 
-        //
-        //     self.positions.x[j] += normal_vector_x * correction_factor_j; 
-        //     self.positions.y[j] += normal_vector_y * correction_factor_j; 
-        //
-        // }
-        
-         
-        // const percent: f32 = 1; // Adjust this (higher = stronger push)
-        // const slop: f32 = 0.01;   // Small threshold to reduce jitter
-        //
-        // if (overlap > slop) {
-        //     const correction = percent * overlap / (inv_mass_i + inv_mass_j);
-        //
-        //     self.positions.x[i] -= normal_vector_x * correction * inv_mass_i;
-        //     self.positions.y[i] -= normal_vector_y * correction * inv_mass_i;
-        //
-        //     self.positions.x[j] += normal_vector_x * correction * inv_mass_j;
-        //     self.positions.y[j] += normal_vector_y * correction * inv_mass_j;
-        // }
-
     }
 
     pub fn generic_collision_detection(self:*@This())void{
+
         const generic_collision_detection_ztracy_zone = ztracy.ZoneNC(@src(),"gcd",0xff_00_f0);
         defer generic_collision_detection_ztracy_zone.End();
         for (0..self.len)|x|{

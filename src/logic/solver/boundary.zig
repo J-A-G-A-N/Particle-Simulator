@@ -1,7 +1,7 @@
 const std = @import("std");
 const Particles = @import("../particles.zig").Particles;
 const Flags = @import("../global.zig").Flags;
-
+const ztracy = @import("ztracy");
 // Handle Boundry Conditions
 
 pub const Boundary_type = enum {
@@ -20,25 +20,27 @@ pub const Boundary = struct {
     }
 
     fn check_boundary_window(self: *@This(), particles: *Particles) void {
+        const check_boundary_window_ztracy_zone =  ztracy.ZoneNC(@src(),"check_boundary_window",0x0f_00_00);
+        defer check_boundary_window_ztracy_zone.End();
         for (0..particles.*.len) |i| {
             const width = @as(f32, @floatFromInt(self.flags.*.WINDOW_WIDTH)) - self.flags.*.GRID_SIZE;
             const height = @as(f32, @floatFromInt(self.flags.*.WINDOW_HEIGHT )) - self.flags.*.GRID_SIZE;
             // Right Boundary
-            if (particles.*.positions.x[i] > width - particles.*.radius[i]) {
+            if (particles.*.positions.x[i] >= width - particles.*.radius[i]) {
                 particles.*.positions.x[i] = width - particles.*.radius[i];
                 particles.*.velocities.x[i] *= -self.flags.*.DAMPING_FACTOR;
             }
 
-            if (particles.*.positions.x[i] < self.flags.*.GRID_SIZE + particles.*.radius[i]) { // Left Boundary
+            if (particles.*.positions.x[i] <= self.flags.*.GRID_SIZE + particles.*.radius[i]) { // Left Boundary
                 particles.*.positions.x[i] = self.flags.*.GRID_SIZE + particles.*.radius[i];
                 particles.*.velocities.x[i] *= -self.flags.*.DAMPING_FACTOR;
             }
 
-            if (particles.*.positions.y[i] > height - particles.*.radius[i]) { // Bottom Boundary
+            if (particles.*.positions.y[i] >= height - particles.*.radius[i]) { // Bottom Boundary
                 particles.*.positions.y[i] = height - particles.*.radius[i];
                 particles.*.velocities.y[i] *= -self.flags.*.DAMPING_FACTOR;
             }
-            if (particles.*.positions.y[i] < self.flags.*.GRID_SIZE + 20 ) { // Top Boundary
+            if (particles.*.positions.y[i] <= self.flags.*.GRID_SIZE + 20 ) { // Top Boundary
                 particles.*.positions.y[i] = self.flags.*.GRID_SIZE + 20;
                 particles.*.velocities.y[i] *= -self.flags.*.DAMPING_FACTOR;
             }

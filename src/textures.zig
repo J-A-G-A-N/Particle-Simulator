@@ -9,6 +9,9 @@ pub const texture2d = struct {
        defer sdl.freeSurface(surface);
        self.texture = try sdl.createTextureFromSurface(r,surface);
     }
-
+    
+    pub fn destroy_texture(self:*@This())void{
+        self.texture.?.*.destroy();
+    }
 };
 
