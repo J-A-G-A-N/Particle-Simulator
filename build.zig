@@ -11,7 +11,8 @@ pub fn build(b: *std.Build) void {
     });
 
     const exe = b.addExecutable(.{
-        .name = "Particle-simulation",
+        //exe-name-T-C-WD-PD-R
+        .name = "PS-L",
         .root_module = exe_mod,
     });
     exe.linkLibC();
@@ -42,48 +43,32 @@ pub fn build(b: *std.Build) void {
     exe.root_module.addImport("ztracy", ztracy.module("root"));
     exe.linkLibrary(ztracy.artifact("tracy"));
    
-
-
-    
-    // const zsdl = b.dependency("zsdl", .{});
-    // exe.root_module.addImport("zsdl2", zsdl.module("zsdl2"));
-    // @import("zsdl").link_SDL2(exe);
-    //
-    // exe.root_module.addImport("zsdl2_ttf", zsdl.module("zsdl2_ttf"));
-    // @import("zsdl").link_SDL2_ttf(exe);
-    // 
-    //  exe.root_module.addImport("zsdl2_image", zsdl.module("zsdl2_image"));
-    // @import("zsdl").link_SDL2_image(exe);
-    //
-    // exe.root_module.addImport("zsdl2_image", zsdl.module("zsdl2_image"));
-    // @import("zsdl").link_SDL2_image(exe);
-    //
-    //  // Optionally use prebuilt libs instead of relying on system installed SDL...
-    //
-    //
-    //
-    //
-    // @import("zsdl").prebuilt_sdl2.addLibraryPathsTo(exe);
-    // if (@import("zsdl").prebuilt_sdl2.install(b, target.result, .bin,.{
-    //     .ttf = true,
-    //     .image = true,
-    // })) |install_sdl2_step| {
-    //     b.getInstallStep().dependOn(install_sdl2_step);
-    // }
-
-
-        const exe_options = b.addOptions();
-    exe.root_module.addOptions("build_options", exe_options);
-
     const zsdl = b.dependency("zsdl", .{});
     exe.root_module.addImport("zsdl2", zsdl.module("zsdl2"));
     exe.root_module.addImport("zsdl2_image", zsdl.module("zsdl2_image"));
+    exe.root_module.addImport("zsdl2_ttf", zsdl.module("zsdl2_ttf"));
 
-    @import("zsdl").prebuilt_sdl2.addLibraryPathsTo(exe);
 
+    //@import("zsdl").prebuilt_sdl2.addLibraryPathsTo(exe);
     @import("zsdl").link_SDL2(exe);
+    @import("zsdl").link_SDL2_ttf(exe);
     @import("zsdl").link_SDL2_image(exe);
 
+
+    
+    @import("zsdl").prebuilt_sdl2.addLibraryPathsTo(exe);
+    if (@import("zsdl").prebuilt_sdl2.install(b, target.result, .bin,.{
+        .ttf = true,
+        .image = true,
+    })) |install_sdl2_step| {
+        b.getInstallStep().dependOn(install_sdl2_step);
+    }
+
+
+    const exe_options = b.addOptions();
+    exe.root_module.addOptions("build_options", exe_options);
+
+   
 
 
     b.installArtifact(exe);
