@@ -4,13 +4,16 @@ const simd = std.simd;
 pub const vec2 = struct {
     x:[]f32,
     y:[]f32,
-    len:usize,
+    len:usize, // Represents the no of used space
+    capacity:usize, //Represets the no of spaces 
     allocator:std.mem.Allocator,
+
     pub fn init(allocator:std.mem.Allocator,size:usize) !vec2{
         return vec2 {
             .x = try allocator.alloc(f32,size), 
             .y = try allocator.alloc(f32,size), 
-            .len =size,
+            .len = 0,
+            .capacity = size,
             .allocator = allocator,
         };
     }
@@ -29,8 +32,10 @@ pub const vec2 = struct {
     }
 
     pub fn resize(self: *vec2, new_capacity: usize) !void {
-        self.x = try self.allocator.realloc(self.x, new_capacity);
-        self.y = try self.allocator.realloc(self.y, new_capacity);
+        const new_x = try self.allocator.realloc(self.x, new_capacity);
+        const new_y = try self.allocator.realloc(self.y, new_capacity);
+        self.x = new_x;
+        self.y = new_y;
         self.capacity = new_capacity;
     }
 
@@ -39,6 +44,7 @@ pub const vec2 = struct {
         self.len -= 1;
         return .{ self.x[self.len], self.y[self.len] };
     }
+
     pub fn MVSVX(self:*@This(),other:*vec2,result:vec2)void{
         const simdf32vec = @Vector(16, f32);
 

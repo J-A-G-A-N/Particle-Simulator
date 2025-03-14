@@ -5,7 +5,7 @@ const Flags = @import("global.zig").Flags;
 const ztracy = @import("ztracy");
 const colors = @import("../colors.zig");
 const Boundary = @import("solver/boundary.zig").Boundary;
-const  Gird_collision_handler = @import("collision_handler.zig").Gird_collision_handler;
+const  Grid_collision_handler = @import("collision_handler.zig").Grid_collision_handler;
 
 ////////////////////////////
 /// TODO: move the partice's update_positions to a solver inerface
@@ -22,108 +22,61 @@ pub const Particles = struct {
     colors: []sdl.Color,
     flags: *Flags,
     allocator: std.mem.Allocator,
+    capacity:usize,
 
     /// Return a pointer to a circles instance
-    pub fn init(allocator: std.mem.Allocator, size: usize, flags_ptr: *Flags) !Particles {
-        var particles: Particles = .{
-            .positions = try vec2.init(allocator, size),
-            .velocities = try vec2.init(allocator, size),
-            .len = size,
-            .radius = try allocator.alloc(f32, size),
-            .colors = try allocator.alloc(sdl.Color, size),
+    pub fn init(allocator: std.mem.Allocator, allocation_size: usize, flags_ptr: *Flags) !Particles {
+        const particles: Particles = .{
+            .positions = try vec2.init(allocator, allocation_size),
+            .velocities = try vec2.init(allocator, allocation_size),
+            .len = 0,
+            .capacity = allocation_size,
+            .radius = try allocator.alloc(f32, allocation_size),
+            .colors = try allocator.alloc(sdl.Color, allocation_size),
             .flags = flags_ptr,
             .allocator = allocator,
         };
-        initialize_particles(&particles);
         return particles;
     }
-
-    fn random_float_clamped_gen(rng: *std.Random, min: f32, max: f32) f32 {
-        return std.math.lerp(min, max, rng.float(f32));
-    }
-
-    fn random_u8(rng: *std.Random, min: u8, max: u8) u8 {
-    return @as(u8, rng.intRangeAtMost(u8, min, max));
-}
-    var hue:f32 = 0;
-    pub fn initialize_particles(particles: *Particles) void {
-        var prng = std.Random.DefaultPrng.init(@intCast(std.time.nanoTimestamp()));
-
-        var rng = prng.random();
-        @memset(particles.*.positions.x, 0);
-        @memset(particles.*.positions.y, 0);
-        //var counter:u32 = 1 ;
-        //const N:usize = 100;
-        for (0..particles.*.len) |i| {
-            particles.*.radius[i] = particles.*.flags.*.PARTICLE_RADIUS;
-            particles.*.colors[i] = colors.Red;
-            if (particles.flags.*.IF_GRAVITY){
-            particles.*.velocities.x[i] = random_float_clamped_gen(&rng, -vel*0.5,vel*0.5);
-            particles.*.velocities.y[i] = 0;
-
-            }
-            particles.*.velocities.x[i] = random_float_clamped_gen(&rng, -vel,vel);
-            particles.*.velocities.y[i] = random_float_clamped_gen(&rng, -vel,vel);
-
-            //particles.update_particles_colors(); // Jet Color
-
-            particles.*.colors[i] = getColor(@as(f32,@floatFromInt(i)));
-
-             // Full spectrum
-            //const hue: f32 = @as(f32,@floatFromInt(counter)); // Full spectrum
-            // if (i / N == 100) counter += 1;  hue = random_float_clamped_gen(&rng, 0, 360.0);
-            // particles.*.colors[i] = hsvToRgb(hue, 1, 1);
-
-        }
-    }
-   
-
-    fn hsvToRgb(h: f32, s: f32, v: f32) sdl.Color {
-        const c = v * s;
-        const x = c * (1.0 - @abs(@mod(h / 60.0, 2.0) - 1.0));
-        const m = v - c;
-        
-        var r: f32 = 0.0;
-        var g: f32 = 0.0;
-        var b: f32 = 0.0;
-
-        if (h < 60.0) {
-            r = c; g = x; b = 0.0;
-        } else if (h < 120.0) {
-            r = x; g = c; b = 0.0;
-        } else if (h < 180.0) {
-            r = 0.0; g = c; b = x;
-        } else if (h < 240.0) {
-            r = 0.0; g = x; b = c;
-        } else if (h < 300.0) {
-            r = x; g = 0.0; b = c;
-        } else {
-            r = c; g = 0.0; b = x;
-        }
-
-        return .{
-            .r = @as(u8, @intFromFloat((r + m) * 255.0)),
-            .g = @as(u8, @intFromFloat((g + m) * 255.0)),
-            .b = @as(u8, @intFromFloat((b + m) * 255.0)),
-            .a = 255,
-        };
-    }
-
     
-    fn getColor(t: f32) sdl.Color {
-    const r = (@sin(t) * 0.5) + 0.5;
-    const g = (@sin(t + 0.33 * 2.0 * std.math.pi) * 0.5 ) + 0.5;
-    const b = (@sin(t + 0.66 * 2.0 * std.math.pi) * 0.5 ) + 0.5;
+    pub fn update_len(self:*@This())void{
+       self.len = self.positions.len;
+    }
+    /// Deletes the Circles object
+    pub fn deinit(self: *@This()) void {
+        self.allocator.free(self.radius);
+        self.allocator.free(self.colors);
+        self.positions.deinit();
+        self.velocities.deinit();
+    }
+    pub fn append_radius(self: *@This(), radius: f32) !void {
+        if (self.len >= self.capacity) try self.resize_radius(self.capacity * 2);
+        self.radius[self.len] = radius;
+    }
 
-    return .{
-        .r = @as(u8, @intFromFloat(255.0 * r * r)),
-        .g = @as(u8, @intFromFloat(255.0 * g)),
-        .b = @as(u8, @intFromFloat(255.0 * b * b)),
-        .a = 255,
-    };
-}
+    pub fn resize_radius(self:*@This() , new_capacity: usize) !void {
+        const new_arr = try self.allocator.realloc(self.radius, new_capacity);
+        self.radius= new_arr;
+    }
+    pub fn append_color(self: *@This(), color:sdl.Color) !void {
+        if (self.len >= self.capacity) try self.resize_color(self.capacity * 2);
+        self.colors[self.len] = color;
+    }
+
+    pub fn resize_color(self:*@This(), new_capacity:usize) !void {
+        const new_arr = try self.allocator.realloc(self.colors, new_capacity);
+        self.colors = new_arr;
+    }
 
 
+    pub fn append_positions(self:*@This(),pos:struct{x:f32,y:f32})!void{
+        try self.positions.append(pos.x, pos.y);
+        self.update_len();
+    }
+
+    pub fn append_velocities(self:*@This(),velocity:struct{x:f32,y:f32})!void{
+        try self.velocities.append(velocity.x, velocity.y);
+    }
 
     pub fn update_particles_colors(self:*@This())void{
         for (0..self.len) |i| {
@@ -133,17 +86,10 @@ pub const Particles = struct {
             self.colors[i] = colors.jetColor(normalized_value);
        }
     }
-    /// Deletes the Circles object
-    pub fn deinit(self: *@This()) void {
-        self.allocator.free(self.radius);
-        self.allocator.free(self.colors);
-        self.positions.deinit();
-        self.velocities.deinit();
-    }
 
     // make it in way that the program  don't check for gravity for every single calculations
 
-    pub fn update_positions(self: *@This(),gch:*Gird_collision_handler,boundary:*Boundary) !void {
+    pub fn update_positions(self: *@This(),gch:*Grid_collision_handler,boundary:*Boundary) !void {
             
         const ztracy_zone = ztracy.ZoneNC(@src(),"update_positions", 0xff_ff_f0);
         ztracy_zone.End();
@@ -265,4 +211,88 @@ pub const Particles = struct {
         
 };
 
+pub const spawn_method = enum {
+    Random,
+    Grid,
+    Flow,
+};
+
+pub const particle_spawner = struct {
+    method: spawn_method,
+    flags: *Flags,
+
+    pub fn spawn(self: *@This(), particles: *Particles) !void {
+        switch (self.method) {
+            .Random => try self.random_spawn(particles),
+            .Grid => self.grid_spawn(particles),
+            .Flow => self.flow_spawn(particles),
+        }
+    }
+
+    fn random_float_clamped_gen(rng: *std.Random, min: f32, max: f32) f32 {
+        return std.math.lerp(min, max, rng.float(f32));
+    }
+
+    fn random_spawn(self: *@This(), particles: *Particles)!void {
+        try initialize_particles(particles);
+        var prng = std.Random.DefaultPrng.init(@intCast(std.time.milliTimestamp()));
+        var rng = prng.random();
+        var i:usize = 0;
+        
+        while (i < particles.*.flags.*.MAX_PARTICLE_COUNT) {
+
+            // Positions 
+             try particles.append_positions(.{.x = random_float_clamped_gen(&rng, self.flags.*.GRID_SIZE,
+                 @as(f32, @floatFromInt(self.flags.*.WINDOW_WIDTH)) -
+                particles.*.radius[i] - self.flags.*.GRID_SIZE),
+             .y = random_float_clamped_gen(&rng, self.flags.*.GRID_SIZE + 20,
+                     @as(f32, @floatFromInt(self.flags.*.WINDOW_HEIGHT)) -
+                particles.*.radius[i] - self.flags.*.GRID_SIZE)});
+            try particles.append_radius(particles.*.flags.*.PARTICLE_RADIUS);
+            try particles.append_color(colors.getColor(@as(f32,@floatFromInt(i))));
+
+
+
+             // velocities
+            if (particles.flags.*.IF_GRAVITY){
+            try particles.*.append_velocities(.{.x = random_float_clamped_gen(&rng, -vel * 0.5,vel * 0.5),.y = 0});
+
+            }
+           try particles.*.append_velocities(
+            .{.x = random_float_clamped_gen(&rng, -vel,vel),
+            .y = random_float_clamped_gen(&rng, -vel,vel)});
+           i += 1;
+        }
+    std.debug.print("particles len :{}\n", .{particles.len});
+    std.debug.print("particles capacity :{}\n", .{particles.capacity});
+
+    std.debug.print("positions len :{}\n", .{particles.positions.len});
+    std.debug.print("positions capacity :{}\n", .{particles.positions.capacity});
+
+    std.debug.print("velocities len :{}\n", .{particles.velocities.len});
+    std.debug.print("velocities capacity :{}\n", .{particles.velocities.capacity});
+
+    }
+    
+    var hue:f32 = 0;
+    pub fn initialize_particles(particles: *Particles) ! void {
+        @memset(particles.*.positions.x, 0);
+        @memset(particles.*.positions.y, 0);
+        @memset(particles.*.velocities.x, 0);
+        @memset(particles.*.velocities.y, 0);
+    }
+
+    fn grid_spawn(self: *@This(), particles: *Particles) void {
+        _ = self;
+        _ = particles.*;
+    }
+    fn flow_spawn(self: *@This(), particles: *Particles) void {
+        _ = self;
+        _ = particles.*;
+    }
+
+    pub fn create_spawner(method: spawn_method, flags: *Flags) particle_spawner {
+        return particle_spawner{ .method = method, .flags = flags };
+    }
+};
 

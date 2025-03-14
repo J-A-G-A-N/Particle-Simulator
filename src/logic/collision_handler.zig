@@ -1,11 +1,13 @@
 const std = @import("std");
-
 const Particles = @import("particles.zig").Particles;
 const vec2 = @import("vectors.zig").vec2;
 const Flags = @import("global.zig").Flags;
+const Renderer = @import("../renderer.zig").Renderer;
 const ztracy =  @import("ztracy");
 const debug = std.log.debug;
-pub const Gird_collision_handler  = struct {
+const sdl = @import("zsdl2");
+
+pub const Grid_collision_handler  = struct {
     num_x:u32,
     num_y:u32,
     grid_size:f32,
@@ -17,25 +19,25 @@ pub const Gird_collision_handler  = struct {
     allocator:std.mem.Allocator,
     particles:*Particles,
     
-    pub fn init_grid(allocator:std.mem.Allocator,flags:*Flags,particles:*Particles)!Gird_collision_handler{
+    pub fn init_grid(allocator:std.mem.Allocator,flags:*Flags,particles:*Particles)!Grid_collision_handler{
         const num_x = @divTrunc(flags.WINDOW_WIDTH , @as(i32,@intFromFloat(flags.*.GRID_SIZE)));
         const num_y = @divTrunc(flags.WINDOW_HEIGHT , @as(i32,@intFromFloat(flags.*.GRID_SIZE)));
-        var gird_collision_handler = Gird_collision_handler{
+        var grid_collision_handler = Grid_collision_handler{
             .num_x  = @as(u32,@intCast(num_x)),
             .num_y = @as(u32,@intCast(num_y)),
             .grid_size = flags.*.GRID_SIZE,
             .collision_pairs = std.ArrayList([2]usize).init(allocator),
             .flags = flags,
-            .grid_array = try allocator.alloc(u8,@as(usize,@intCast(num_x * num_y + 1))),
-            .start_array = try allocator.alloc(u32,@as(usize,@intCast(num_x * num_y + 1))),
-            .sorted_array = try allocator.alloc(u32,@as(usize,@intCast(particles.*.len))),
+            .grid_array = try allocator.alloc(u8,@as(usize,@intCast(num_x * num_y ))),
+            .start_array = try allocator.alloc(u32,@as(usize,@intCast(num_x * num_y ))),
+            .sorted_array = try allocator.alloc(u32,@as(usize,@intCast(particles.*.len ))),
             .particles = particles,
             .allocator = allocator,
         };
-        clear_all_array(&gird_collision_handler);     
-        return gird_collision_handler;
+        clear_all_array(&grid_collision_handler);     
+        return grid_collision_handler;
     }
-     pub fn clear_all_array(collision_handler:*Gird_collision_handler)void{
+     pub fn clear_all_array(collision_handler:*Grid_collision_handler)void{
         @memset(collision_handler.grid_array, 0);
         @memset(collision_handler.start_array, 0);
         @memset(collision_handler.sorted_array, 0);
@@ -86,6 +88,7 @@ pub const Gird_collision_handler  = struct {
             }
             self.grid_array[index] += 1;
         }
+            //std.debug.print("grid_array :{any}\n", .{self.grid_array});
 
        }
 
@@ -96,7 +99,7 @@ pub const Gird_collision_handler  = struct {
         for(1..self.grid_array.len)|i|{
             self.start_array[i] = self.start_array[i - 1]  + @as(u32,self.grid_array[i - 1]);   
         }
-       // std.debug.print("{any}\n", .{self.start_array});
+        //std.debug.print("start_array : :{any}\n", .{self.start_array});
        }
         
     //  Sorts the particles index
@@ -110,7 +113,7 @@ pub const Gird_collision_handler  = struct {
     @memset(cell_counters, 0);
 
     // Sort particles into grid cells
-    for (0..self.particles.*.len) |particle_index| {
+    for (0..self.particles.*.len ) |particle_index| {
         const x: f32 = self.particles.*.positions.x[particle_index];
         const y: f32 = self.particles.*.positions.y[particle_index];
         const grid_index = self.comp_index(x, y);
@@ -150,12 +153,6 @@ pub const Gird_collision_handler  = struct {
         const Neighbor_offsets = [_][2]i32{ .{0, 0}, .{1, 0}, .{1, 1}, .{0, 1}, .{-1, 1} };
     
 
-        // const Neighbor_offsets = [_][2] i32{
-        //     .{-1,-1}, .{-1,0}, .{-1,1},
-        //     .{0,-1},  .{0,0},       .{0,1},
-        //     .{1,-1}, .{1,0},  .{1,1},
-        // };
-
 
         const grid_x = grid_index / self.num_y;
         const grid_y = grid_index % self.num_y;
@@ -168,15 +165,16 @@ pub const Gird_collision_handler  = struct {
             const ny = @as(i32,@intCast(grid_y)) + dy;
 
             if (nx < 0 or nx >= self.num_x or ny < 0 or ny >= self.num_y) continue;
-
+            
             const neighboring_grid = @as(usize,@intCast(nx)) * self.num_y + @as(usize,@intCast(ny));
             const start_idx = self.start_array[neighboring_grid];
-            const end_idx = if (neighboring_grid + 1 < self.num_x * self.num_y) self.start_array[neighboring_grid + 1] else self.particles.*.len;
+            const end_idx = if (neighboring_grid + 1 < self.num_x * self.num_y) self.start_array[neighboring_grid + 1] else self.particles.*.len ;
 
             for (start_idx..end_idx) |j| {
                 const particle_j = self.sorted_array[j];
 
                 if (particle_i == particle_j) continue;
+                //std.debug.print("({},{})\n", .{particle_i,particle_j});
 
                 if (self.particles.*.check_collision(particle_i, particle_j)) {
                     // Store collision pair instead of resolving immediately
@@ -193,6 +191,27 @@ pub const Gird_collision_handler  = struct {
         self.particles.*.resolve_collision(pair[0], pair[1]);
     }
 }
+    
+    pub fn draw_line(self:*@This(),R:*Renderer,)!void{
+        // vertical lines
+        var x_cord_top:f32 = 0;
+        var x_cord_bottom:f32 = 0;
+        var y_cord_left:f32 = 0;
+        var y_cord_right:f32 = 0;
+
+        for (0..self.num_x) |_| {
+            try R.r.drawLineF( x_cord_top,0,x_cord_bottom, @as(f32,@floatFromInt(self.flags.*.WINDOW_HEIGHT)));
+            x_cord_top += self.flags.*.GRID_SIZE;
+            x_cord_bottom += self.flags.*.GRID_SIZE;
+        }
+
+        for (0..self.num_y) |_| {
+            try R.r.drawLineF( 0,y_cord_left, @as(f32,@floatFromInt(self.flags.*.WINDOW_WIDTH)),y_cord_right);
+            y_cord_left += self.flags.*.GRID_SIZE;
+            y_cord_right += self.flags.*.GRID_SIZE;
+        }
+
+    }
     
 };
 

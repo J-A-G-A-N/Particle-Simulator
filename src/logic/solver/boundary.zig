@@ -22,7 +22,7 @@ pub const Boundary = struct {
     fn check_boundary_window(self: *@This(), particles: *Particles) void {
         const check_boundary_window_ztracy_zone =  ztracy.ZoneNC(@src(),"check_boundary_window",0x0f_00_00);
         defer check_boundary_window_ztracy_zone.End();
-        for (0..particles.*.len) |i| {
+        for (0..particles.*.len ) |i| {
             const width = @as(f32, @floatFromInt(self.flags.*.WINDOW_WIDTH)) - self.flags.*.GRID_SIZE;
             const height = @as(f32, @floatFromInt(self.flags.*.WINDOW_HEIGHT )) - self.flags.*.GRID_SIZE;
             // Right Boundary
