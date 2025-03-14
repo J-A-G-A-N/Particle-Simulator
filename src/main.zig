@@ -26,14 +26,14 @@ var bg_flip: bool = false;
 var buffer: [13]u8 = [_]u8{0} ** 13;
 //1366x768
 var flags: Flags = .{
-    .WINDOW_WIDTH = 720,
+    .WINDOW_WIDTH = 1000,
     .WINDOW_HEIGHT = 696,
     .TARGET_FPS = 60,
-    .PARTICLE_RADIUS = 2,
-    .MAX_PARTICLE_COUNT = 7000, //Max = 7300
+    .PARTICLE_RADIUS = 3,
+    .MAX_PARTICLE_COUNT = 3000, //Max = 7300
     .DAMPING_FACTOR = 0.1, //Min 0.75,Max 1 for r=2
     .PARTICLE_COLLISION_DAMPING = 0.9999, //Min 0.85 Max 1 for r=2
-    .GRID_SIZE = 8,
+    .GRID_SIZE = 12,
     .PAUSED = true,
     .IF_GRAVITY = false,
 };
@@ -57,12 +57,8 @@ var t: Text = undefined;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator: std.mem.Allocator = undefined;
 
-
-
-
-
-pub fn load_meida(r:*sdl.Renderer,file:[:0]const u8)!void{
-   try texture_2D.load_texture2d(r,file); 
+pub fn load_meida(r: *sdl.Renderer, file: [:0]const u8) !void {
+    try texture_2D.load_texture2d(r, file);
 }
 
 pub fn init() !void {
@@ -85,7 +81,7 @@ pub fn init() !void {
 
     allocator = gpa.allocator();
 
-    spawner = Spawners.create_spawner(.Random, &flags);
+    spawner = Spawners.create_spawner(.Flow, &flags);
     particles = try Particles.init(allocator, flags.MAX_PARTICLE_COUNT, &flags);
     try spawner.spawn(&particles);
     t.init(&R);
@@ -144,7 +140,10 @@ pub fn updateAndRender() !void {
         //boundary.check_boundary(&particles);
         //particles._update_positions(&boundary);
         //particles.generic_collision_detection();
+        spawner.update(0.3, &particles);
+
         try particles.update_positions(&grid_collision, &boundary);
+
     }
 
     try R.render_circles_texture_2d(texture_2D, .{ .X = particles.positions.x, .Y = particles.positions.y, .color = particles.colors }, flags.PARTICLE_RADIUS);
@@ -170,7 +169,7 @@ fn draw_fps() !void {
 }
 
 fn draw_partticle_count() !void {
-    const tpf_raw = try std.fmt.bufPrint(&buffer, "{}", .{flags.MAX_PARTICLE_COUNT});
+    const tpf_raw = try std.fmt.bufPrint(&buffer, "{}", .{particles.len});
     buffer[tpf_raw.len] = 0;
     //const tpf = try std.mem.concatWithSentinel(allocator, u8, &[_][]const u8{ tpf_raw }, 0);
 
