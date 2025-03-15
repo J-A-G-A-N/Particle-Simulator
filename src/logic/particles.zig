@@ -12,7 +12,7 @@ const Grid_collision_handler = @import("collision_handler.zig").Grid_collision_h
 ////////////////////////////
 
 const vel: f32 = 200;
-
+var dt:f32 = 0;
 pub const Particles = struct {
     positions: vec2,
     velocities: vec2,
@@ -38,6 +38,7 @@ pub const Particles = struct {
         return particles;
     }
 
+    
     pub fn update_len(self: *@This()) void {
         self.len = self.positions.len;
     }
@@ -53,30 +54,30 @@ pub const Particles = struct {
         self.radius[self.len] = radius;
     }
 
-    pub fn resize_radius(self: *@This(), new_capacity: usize) !void {
+     fn resize_radius(self: *@This(), new_capacity: usize) !void {
         const new_arr = try self.allocator.realloc(self.radius, new_capacity);
         self.radius = new_arr;
     }
-    pub fn append_color(self: *@This(), color: sdl.Color) !void {
+     fn append_color(self: *@This(), color: sdl.Color) !void {
         if (self.len >= self.capacity) try self.resize_color(self.capacity * 2);
         self.colors[self.len] = color;
     }
 
-    pub fn resize_color(self: *@This(), new_capacity: usize) !void {
+     fn resize_color(self: *@This(), new_capacity: usize) !void {
         const new_arr = try self.allocator.realloc(self.colors, new_capacity);
         self.colors = new_arr;
     }
 
-    pub fn append_positions(self: *@This(), pos: struct { x: f32, y: f32 }) !void {
+     fn append_positions(self: *@This(), pos: struct { x: f32, y: f32 }) !void {
         try self.positions.append(pos.x, pos.y);
         self.update_len();
     }
 
-    pub fn append_velocities(self: *@This(), velocity: struct { x: f32, y: f32 }) !void {
+     fn append_velocities(self: *@This(), velocity: struct { x: f32, y: f32 }) !void {
         try self.velocities.append(velocity.x, velocity.y);
     }
 
-    pub fn update_particles_colors(self: *@This()) void {
+     fn update_particles_colors(self: *@This()) void {
         for (0..self.len) |i| {
             const velocity_magnitude = @sqrt(self.velocities.x[i] * self.velocities.x[i] +
                 self.velocities.y[i] * self.velocities.y[i]);
@@ -93,12 +94,12 @@ pub const Particles = struct {
         const acc_x: f32 = 0;
         var acc_y: f32 = 0;
         if (self.flags.*.IF_GRAVITY == true) {
-            acc_y = 200;
+            acc_y = 100;
         }
         const delta_T: f32 = 0.008;
         //const delta_T: f32 = 0.016;
         const substeps: u8 = 8;
-        const dt = delta_T / @as(f32, @floatFromInt(substeps));
+         dt = delta_T / @as(f32, @floatFromInt(substeps));
         for (0..substeps) |_| {
             boundary.check_boundary(self);
             gch.clear_all_array();
@@ -107,13 +108,33 @@ pub const Particles = struct {
             try gch.update_sorted_array();
             gch.detect_collisions();
             //self.update_particles_colors();
-            for (0..self.len) |i| {
-                self.velocities.x[i] += acc_x * dt;
-                self.velocities.y[i] += acc_y * dt;
+            
+            //Euler method
+            // for (0..self.len) |i| {
+            //
+            //     self.velocities.x[i] += acc_x * dt;
+            //     self.velocities.y[i] += acc_y * dt;
+            //
+            //     self.positions.x[i] += self.velocities.x[i] * dt;
+            //     self.positions.y[i] += self.velocities.y[i] * dt;
+            // }
+            
 
-                self.positions.x[i] += self.velocities.x[i] * dt;
-                self.positions.y[i] += self.velocities.y[i] * dt;
+            //LeapFrog
+            for (0..self.len) |i| {
+                const half_velocity_x = self.velocities.x[i] + acc_x * dt * 0.5;
+                const half_velocity_y = self.velocities.y[i] + acc_y * dt * 0.5;
+
+
+                self.positions.x[i] += half_velocity_x * dt;
+                self.positions.y[i] += half_velocity_y * dt;
+
+
+                self.velocities.x[i] = half_velocity_x + acc_x * dt * 0.5; 
+                self.velocities.y[i] = half_velocity_y + acc_y * dt * 0.5; 
+
             }
+            
         }
     }
 
@@ -166,14 +187,23 @@ pub const Particles = struct {
         const overlap = min_distance - distance;
         if (overlap > 0) {
             // Weighted separation based on inverse mass
-            const total_inv_mass = inv_mass_i + inv_mass_j;
-            const correction_factor_i = overlap * (inv_mass_i / total_inv_mass);
-            const correction_factor_j = overlap * (inv_mass_j / total_inv_mass);
+            // const total_inv_mass = inv_mass_i + inv_mass_j;
+            // const correction_factor_i = overlap * (inv_mass_i / total_inv_mass);
+            // const correction_factor_j = overlap * (inv_mass_j / total_inv_mass);
+            //
+            // self.positions.x[i] -= normal_vector_x * correction_factor_i;
+            // self.positions.y[i] -= normal_vector_y * correction_factor_i;
+            // self.positions.x[j] += normal_vector_x * correction_factor_j;
+            // self.positions.y[j] += normal_vector_y * correction_factor_j;
+            const penalty_strength = 10000.0; // Adjust for stability
+            const penalty_acc_x = normal_vector_x * penalty_strength * overlap;
+            const penalty_acc_y = normal_vector_y * penalty_strength * overlap;
 
-            self.positions.x[i] -= normal_vector_x * correction_factor_i;
-            self.positions.y[i] -= normal_vector_y * correction_factor_i;
-            self.positions.x[j] += normal_vector_x * correction_factor_j;
-            self.positions.y[j] += normal_vector_y * correction_factor_j;
+            self.velocities.x[i] -= penalty_acc_x * inv_mass_i * dt;
+            self.velocities.y[i] -= penalty_acc_y * inv_mass_i * dt;
+            self.velocities.x[j] += penalty_acc_x * inv_mass_j * dt;
+            self.velocities.y[j] += penalty_acc_y * inv_mass_j * dt;
+
         }
 
         self.velocities.x[i] -= normal_vector_x * k * inv_mass_i;
@@ -194,6 +224,7 @@ pub const Particles = struct {
             }
         }
     }
+
 };
 
 pub const spawn_method = enum {
@@ -231,7 +262,7 @@ pub const particle_spawner = struct {
                 particles.*.radius[i] - self.flags.*.GRID_SIZE), .y = random_float_clamped_gen(&rng, self.flags.*.GRID_SIZE + 20, @as(f32, @floatFromInt(self.flags.*.WINDOW_HEIGHT)) -
                 particles.*.radius[i] - self.flags.*.GRID_SIZE) });
             try particles.append_radius(particles.*.flags.*.PARTICLE_RADIUS);
-
+            try particles.append_color(colors.getColor(@as(f32,@floatFromInt(i))));
             // velocities
             if (particles.flags.*.IF_GRAVITY) {
                 try particles.*.append_velocities(.{ .x = random_float_clamped_gen(&rng, -vel * 0.5, vel * 0.5), .y = 0 });
@@ -264,33 +295,49 @@ pub const particle_spawner = struct {
 
     var d_t: f32 = 0.0; // Time variable
     fn flow_spawn(self: *@This(), particles: *Particles) void {
+        const flow_spawn_ztracy_zone = ztracy.ZoneNC(@src(), "flow_spawn", 0xff_f0_ff);
+        flow_spawn_ztracy_zone.End();
+
         if (particles.len >= particles.capacity) return; // Stop if full
         _ = self;
         const index = particles.len;
 
         // Fixed Emission Point
-        const emission_x: f32 = 50;
-        const emission_y: f32 = 50.0; // Fixed starting height
+        const emission_x: f32 = 25;
+        const emission_y: f32 = 200; // Fixed starting height
 
         // Sine Wave Motion for Velocity
-        // const amplitude: f32 = 470.0;  // How wide the sine wave is
-        // const frequency: f32 = 0.05;   // Controls wave speed
-        // const phase_shift: f32 = d_t * frequency;
+        // const amplitude: f32 = 150.0;  // How wide the sine wave is
+        // const frequency: f32 = 3;   // Controls wave speed
+        // const phase_shift: f32 = @divExact((d_t * frequency),180);
+
 
         particles.positions.x[index] = emission_x;
         particles.positions.y[index] = emission_y;
 
-        //particles.velocities.x[index] = amplitude * @sin(phase_shift); // Oscillating sideways motion
-        particles.velocities.x[index] = 470; // Oscillating sideways motion
-        particles.velocities.y[index] = 100; // Moves downward normally
+        //particles.velocities.y[index] = amplitude * @sin(phase_shift) + amplitude * @cos(phase_shift * 0.5); // Oscillating sideways motion
+        particles.velocities.x[index] = 380; // Oscillating sideways motion
+        particles.velocities.y[index] = 80; // Moves downward normally
         particles.radius[index] = particles.flags.*.PARTICLE_RADIUS;
 
+        // Rainbow Color
         const particles_per_color_group: usize = 50;
         const num_color_variations: usize = 40;
         const color_group = @divTrunc(index, particles_per_color_group);
         const color_index = @mod(color_group, num_color_variations);
         particles.colors[index] = colors.getColor(@as(f32, @floatFromInt(color_index * particles_per_color_group)));
 
+        
+        //JetColor
+        // const particles_per_color_group: usize = 50;
+        // const num_color_variations: usize = 40;
+        // const color_group = @divTrunc(index, particles_per_color_group);
+        // const color_index = @mod(color_group, num_color_variations);
+        //
+        // // Normalize the color index to a value between 0.0 and 1.0 for jetColor
+        // const normalized_color_value = @as(f32, @floatFromInt(color_index)) / @as(f32, @floatFromInt(num_color_variations));
+        // particles.colors[index] = colors.jetColor(normalized_color_value);
+        //
 
         particles.len += 1;
         d_t += 1;
@@ -299,8 +346,8 @@ pub const particle_spawner = struct {
 
     var spawn_timer: f32 = 0;
 
-    pub fn update(spawner: *@This(), dt: f32, particles: *Particles) void {
-        spawn_timer += dt;
+    pub fn update(spawner: *@This(), dT: f32, particles: *Particles) void {
+        spawn_timer += dT;
         if (spawn_timer > 0.1) { // Adjust spawn rate here (0.1s per particle)
             spawner.flow_spawn(particles);
             spawn_timer = 0;

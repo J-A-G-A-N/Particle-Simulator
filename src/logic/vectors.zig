@@ -102,21 +102,4 @@ pub const vec2 = struct {
         }
     }
 
-    //
-    //
-    //    pub fn MVSVY(self:*@This(),other:*vec2)vec2.y{
-    //        const simd_vec = @Vector(self.len, f32);
-    //        const vec1y:simd_vec = self.y[0..][0..].*;
-    //        const vec2y:simd_vec = other.y[0..][0..].*;
-    //        const result_bv = vec1y * vec2y;
-    //        const result:vec2.x = result_bv;
-    //        return result;
-    //
-    //    }
-    //
-    //    // pub fn MVSV(self:*@This(),other:*vec2)vec{
-    //    //
-    //    // }
-    //
-    //
-};
+ };

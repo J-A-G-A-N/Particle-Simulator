@@ -26,14 +26,14 @@ var bg_flip: bool = false;
 var buffer: [13]u8 = [_]u8{0} ** 13;
 //1366x768
 var flags: Flags = .{
-    .WINDOW_WIDTH = 1000,
-    .WINDOW_HEIGHT = 696,
+    .WINDOW_WIDTH =960,
+    .WINDOW_HEIGHT = 672,
     .TARGET_FPS = 60,
-    .PARTICLE_RADIUS = 3,
-    .MAX_PARTICLE_COUNT = 3000, //Max = 7300
-    .DAMPING_FACTOR = 0.1, //Min 0.75,Max 1 for r=2
-    .PARTICLE_COLLISION_DAMPING = 0.9999, //Min 0.85 Max 1 for r=2
-    .GRID_SIZE = 12,
+    .PARTICLE_RADIUS = 2,
+    .MAX_PARTICLE_COUNT =8000, //Max = 8000
+    .DAMPING_FACTOR = 0.87, //Min 0.75,Max 1 for r=2
+    .PARTICLE_COLLISION_DAMPING = 0.85, //Min 0.85 Max 1 for r=2
+    .GRID_SIZE = 8,
     .PAUSED = true,
     .IF_GRAVITY = false,
 };
@@ -81,19 +81,11 @@ pub fn init() !void {
 
     allocator = gpa.allocator();
 
-    spawner = Spawners.create_spawner(.Flow, &flags);
+    spawner = Spawners.create_spawner(.Random, &flags);
     particles = try Particles.init(allocator, flags.MAX_PARTICLE_COUNT, &flags);
     try spawner.spawn(&particles);
     t.init(&R);
     try t.load_font("resources/fcnf.ttf", 21);
-
-    // var count:u8 = 0;
-    // if(count == 0){
-    //     for(0..particles.len)|i|{
-    //         std.debug.print("velocities pos : ({},{})\n", .{particles.velocities.x[i],particles.velocities.y[i]});
-    //     }
-    //     count += 1;
-    // }
     boundary = Boundary.create_boundry(.window, &flags);
     grid_collision = try Grid_collision_handler.init_grid(allocator, &flags, &particles);
 }
@@ -140,8 +132,8 @@ pub fn updateAndRender() !void {
         //boundary.check_boundary(&particles);
         //particles._update_positions(&boundary);
         //particles.generic_collision_detection();
-        spawner.update(0.3, &particles);
-
+        
+        //spawner.update(0.3, &particles);
         try particles.update_positions(&grid_collision, &boundary);
 
     }
@@ -157,11 +149,8 @@ pub fn updateAndRender() !void {
 fn draw_fps() !void {
     const tpf_raw = try std.fmt.bufPrint(&buffer, "{d} ms", .{elapsed_time_ms});
     buffer[tpf_raw.len] = 0;
-    //const tpf = try std.mem.concatWithSentinel(allocator, u8, &[_][]const u8{ tpf_raw }, 0);
 
     const tpf: [:0]const u8 = @ptrCast(&buffer);
-    //defer allocator.free(tpf);
-
     try t.draw_text(((tpf)), .{
         .x = 10,
         .y = 5,
@@ -171,11 +160,7 @@ fn draw_fps() !void {
 fn draw_partticle_count() !void {
     const tpf_raw = try std.fmt.bufPrint(&buffer, "{}", .{particles.len});
     buffer[tpf_raw.len] = 0;
-    //const tpf = try std.mem.concatWithSentinel(allocator, u8, &[_][]const u8{ tpf_raw }, 0);
-
     const tpf: [:0]const u8 = @ptrCast(&buffer);
-    //defer allocator.free(tpf);
-
     try t.draw_text(((tpf)), .{
         .x = 170,
         .y = 5,
@@ -209,9 +194,6 @@ pub fn main() !void {
 
         if (elapsed_time_ns < frame_time_ns) {
             const remaining_time_ns = frame_time_ns - elapsed_time_ns;
-            //const remaining_time_ms: f64 = @as(f64, @floatFromInt(remaining_time_ns)) / 1_000_000.0; // Convert ns to ms
-            //try stdout.print("sleep Time :{}\n ",.{remaining_time_ms});
-            //std.time.sleep(remaining_time_ns - 500_000);
             std.time.sleep(remaining_time_ns);
         }
 
