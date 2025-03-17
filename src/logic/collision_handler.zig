@@ -6,7 +6,7 @@ const Renderer = @import("../renderer.zig").Renderer;
 const ztracy = @import("ztracy");
 const debug = std.log.debug;
 const sdl = @import("zsdl2");
-
+const Solver = @import("solver/solver.zig").Solver;
 pub const Grid_collision_handler = struct {
     num_x: u32,
     num_y: u32,
@@ -169,7 +169,7 @@ pub const Grid_collision_handler = struct {
                             if (particle_i == particle_j) continue;
                             //std.debug.print("({},{})\n", .{particle_i,particle_j});
 
-                            if (self.particles.*.check_collision(particle_i, particle_j)) {
+                            if (Solver.check_collision(self.particles,particle_i, particle_j)) {
                                 // Store collision pair instead of resolving immediately
                                 self.collision_pairs.append([2]usize{ particle_i, particle_j }) catch unreachable;
                             }
@@ -181,7 +181,7 @@ pub const Grid_collision_handler = struct {
 
         // **Step 2: Resolve all collected collision pairs**
         for (self.collision_pairs.items) |pair| {
-            self.particles.*.resolve_collision(pair[0], pair[1]);
+            Solver.resolve_collision(self.particles,pair[0], pair[1]);
         }
     }
 

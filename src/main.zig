@@ -16,7 +16,7 @@ const Text = @import("render_text.zig").Text;
 const stdout = std.io.getStdOut().writer();
 const Particles = @import("logic/particles.zig").Particles;
 const Spawners = @import("logic/particles.zig").particle_spawner;
-
+const Solver = @import("logic/solver/solver.zig").Solver;
 const Flags = @import("logic/global.zig").Flags;
 const Boundary = @import("logic/solver/boundary.zig").Boundary;
 const Grid_collision_handler = @import("logic/collision_handler.zig").Grid_collision_handler;
@@ -26,16 +26,16 @@ var bg_flip: bool = false;
 var buffer: [13]u8 = [_]u8{0} ** 13;
 //1366x768
 var flags: Flags = .{
-    .WINDOW_WIDTH =960,
-    .WINDOW_HEIGHT = 672,
+    .WINDOW_WIDTH =720,
+    .WINDOW_HEIGHT = 704,
     .TARGET_FPS = 60,
     .PARTICLE_RADIUS = 2,
     .MAX_PARTICLE_COUNT =8000, //Max = 8000
     .DAMPING_FACTOR = 0.87, //Min 0.75,Max 1 for r=2
     .PARTICLE_COLLISION_DAMPING = 0.85, //Min 0.85 Max 1 for r=2
     .GRID_SIZE = 8,
-    .PAUSED = true,
-    .IF_GRAVITY = false,
+    .PAUSED = false,
+    .IF_GRAVITY = true,
 };
 
 const colors = @import("colors.zig");
@@ -50,7 +50,6 @@ var text_texture: Texture2d = .{ .texture = undefined };
 var particles: Particles = undefined;
 var spawner: Spawners = undefined;
 var boundary: Boundary = undefined;
-
 var grid_collision: Grid_collision_handler = undefined;
 var t: Text = undefined;
 
@@ -81,7 +80,7 @@ pub fn init() !void {
 
     allocator = gpa.allocator();
 
-    spawner = Spawners.create_spawner(.Random, &flags);
+    spawner = Spawners.create_spawner(.Flow, &flags);
     particles = try Particles.init(allocator, flags.MAX_PARTICLE_COUNT, &flags);
     try spawner.spawn(&particles);
     t.init(&R);
@@ -133,8 +132,8 @@ pub fn updateAndRender() !void {
         //particles._update_positions(&boundary);
         //particles.generic_collision_detection();
         
-        //spawner.update(0.3, &particles);
-        try particles.update_positions(&grid_collision, &boundary);
+        spawner.update(0.3, &particles);
+        try Solver.update_positions(&particles,&grid_collision, &boundary);
 
     }
 
