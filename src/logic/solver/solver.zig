@@ -8,6 +8,9 @@ const Boundary = @import("boundary.zig").Boundary;
 var dt:f32 = 0;
 
 pub const Solver = struct{
+     
+    
+
     pub fn update_positions(particles_ptr: *Particles, gch: *Grid_collision_handler, boundary: *Boundary) !void {
         const ztracy_zone = ztracy.ZoneNC(@src(), "update_positions", 0xff_ff_f0);
         ztracy_zone.End();
@@ -108,16 +111,7 @@ pub fn get_distance_squared(particles_ptr: *Particles, i: usize, j: usize) f32 {
         const min_distance = particles_ptr.radius[i] + particles_ptr.radius[j];
         const overlap = min_distance - distance;
         if (overlap > 0) {
-            // Weighted separation based on inverse mass
-            // const total_inv_mass = inv_mass_i + inv_mass_j;
-            // const correction_factor_i = overlap * (inv_mass_i / total_inv_mass);
-            // const correction_factor_j = overlap * (inv_mass_j / total_inv_mass);
-            //
-            // particles_ptr.positions.x[i] -= normal_vector_x * correction_factor_i;
-            // particles_ptr.positions.y[i] -= normal_vector_y * correction_factor_i;
-            // particles_ptr.positions.x[j] += normal_vector_x * correction_factor_j;
-            // particles_ptr.positions.y[j] += normal_vector_y * correction_factor_j;
-            const penalty_strength = 10000.0; // Adjust for stability
+            const penalty_strength = 5000.0; // Adjust for stability
             const penalty_acc_x = normal_vector_x * penalty_strength * overlap;
             const penalty_acc_y = normal_vector_y * penalty_strength * overlap;
 

@@ -160,6 +160,7 @@ pub const particle_spawner = struct {
     }
 
     var d_t: f32 = 0.0; // Time variable
+    const no_of_streams:usize = 10;
     fn flow_spawn(self: *@This(), particles: *Particles) void {
         const flow_spawn_ztracy_zone = ztracy.ZoneNC(@src(), "flow_spawn", 0xff_f0_ff);
         flow_spawn_ztracy_zone.End();
@@ -170,29 +171,48 @@ pub const particle_spawner = struct {
 
         // Fixed Emission Point
         const emission_x: f32 = 25;
-        const emission_y: f32 = 200; // Fixed starting height
+        const emission_y: f32 = 50; // Fixed starting height
 
         // Sine Wave Motion for Velocity
         // const amplitude: f32 = 150.0;  // How wide the sine wave is
         // const frequency: f32 = 3;   // Controls wave speed
         // const phase_shift: f32 = @divExact((d_t * frequency),180);
 
-
-        particles.positions.x[index] = emission_x;
-        particles.positions.y[index] = emission_y;
-
-        //particles.velocities.y[index] = amplitude * @sin(phase_shift) + amplitude * @cos(phase_shift * 0.5); // Oscillating sideways motion
-        particles.velocities.x[index] = 380; // Oscillating sideways motion
-        particles.velocities.y[index] = 80; // Moves downward normally
-        particles.radius[index] = particles.flags.*.PARTICLE_RADIUS;
-
-        // Rainbow Color
-        const particles_per_color_group: usize = 50;
-        const num_color_variations: usize = 40;
+        const particles_per_color_group: usize = 250;
+        const num_color_variations: usize = 20;
         const color_group = @divTrunc(index, particles_per_color_group);
         const color_index = @mod(color_group, num_color_variations);
-        particles.colors[index] = colors.getColor(@as(f32, @floatFromInt(color_index * particles_per_color_group)));
 
+
+
+        for (0..no_of_streams)|i|{
+            particles.positions.x[index + i] = emission_x ;
+            particles.positions.y[index + i] = emission_y + @as(f32,@floatFromInt( i)) * 2 * particles.flags.PARTICLE_RADIUS ;
+
+            //particles.velocities.y[index] = amplitude * @sin(phase_shift) + amplitude * @cos(phase_shift * 0.5); // Oscillating sideways motion
+            particles.velocities.x[index + i ] = 430 ; // Oscillating sideways motion
+            particles.velocities.y[index + i] = 100; // Moves downward normally
+            particles.radius[index + i] = particles.flags.*.PARTICLE_RADIUS;
+
+            // Rainbow Color
+            particles.colors[index + i] = colors.getColor(@as(f32, @floatFromInt(color_index * particles_per_color_group)));
+
+        }
+        // particles.positions.x[index] = emission_x;
+        // particles.positions.y[index] = emission_y;
+        //
+        // //particles.velocities.y[index] = amplitude * @sin(phase_shift) + amplitude * @cos(phase_shift * 0.5); // Oscillating sideways motion
+        // particles.velocities.x[index] = 450; // Oscillating sideways motion
+        // particles.velocities.y[index] = 100; // Moves downward normally
+        // particles.radius[index] = particles.flags.*.PARTICLE_RADIUS;
+        //
+        // // Rainbow Color
+        // const particles_per_color_group: usize = 50;
+        // const num_color_variations: usize = 40;
+        // const color_group = @divTrunc(index, particles_per_color_group);
+        // const color_index = @mod(color_group, num_color_variations);
+        // particles.colors[index] = colors.getColor(@as(f32, @floatFromInt(color_index * particles_per_color_group)));
+        //
         
         //JetColor
         // const particles_per_color_group: usize = 50;
@@ -205,7 +225,7 @@ pub const particle_spawner = struct {
         // particles.colors[index] = colors.jetColor(normalized_color_value);
         //
 
-        particles.len += 1;
+        particles.len += no_of_streams;
         d_t += 1;
         std.log.debug("len: {}, capacity: {}, x.len: {}\n", .{ particles.len, particles.capacity, particles.positions.x.len });
     }

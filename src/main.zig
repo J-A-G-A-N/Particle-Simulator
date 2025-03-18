@@ -26,16 +26,16 @@ var bg_flip: bool = false;
 var buffer: [13]u8 = [_]u8{0} ** 13;
 //1366x768
 var flags: Flags = .{
-    .WINDOW_WIDTH =720,
+    .WINDOW_WIDTH =992,
     .WINDOW_HEIGHT = 704,
     .TARGET_FPS = 60,
     .PARTICLE_RADIUS = 2,
-    .MAX_PARTICLE_COUNT =8000, //Max = 8000
-    .DAMPING_FACTOR = 0.87, //Min 0.75,Max 1 for r=2
-    .PARTICLE_COLLISION_DAMPING = 0.85, //Min 0.85 Max 1 for r=2
+    .MAX_PARTICLE_COUNT =9000, //Max = 800b0
+    .DAMPING_FACTOR = 0.1, //Min 0.75,Max 1 for r=2
+    .PARTICLE_COLLISION_DAMPING = 0.9, //Min 0.85 Max 1 for r=2
     .GRID_SIZE = 8,
-    .PAUSED = false,
-    .IF_GRAVITY = true,
+    .PAUSED = true,
+    .IF_GRAVITY = false,
 };
 
 const colors = @import("colors.zig");
@@ -81,12 +81,14 @@ pub fn init() !void {
     allocator = gpa.allocator();
 
     spawner = Spawners.create_spawner(.Flow, &flags);
-    particles = try Particles.init(allocator, flags.MAX_PARTICLE_COUNT, &flags);
+    particles = try Particles.init(allocator, 
+        flags.MAX_PARTICLE_COUNT, &flags);
     try spawner.spawn(&particles);
     t.init(&R);
     try t.load_font("resources/fcnf.ttf", 21);
     boundary = Boundary.create_boundry(.window, &flags);
-    grid_collision = try Grid_collision_handler.init_grid(allocator, &flags, &particles);
+    grid_collision = try Grid_collision_handler.init_grid(allocator, 
+        &flags, &particles);
 }
 
 pub fn deinit() void {
@@ -104,7 +106,10 @@ pub fn make_time(text: [:0]const u8) [:0]const u8 {
 }
 
 pub fn updateAndRender() !void {
-    const updateAndRender_ztracy_zone = ztracy.ZoneNC(@src(), "updateAndRender", 0x0f_00_00);
+
+    const updateAndRender_ztracy_zone = ztracy.ZoneNC(@src(),
+        "updateAndRender", 0x0f_00_00);
+
     defer updateAndRender_ztracy_zone.End();
 
     var event: sdl.Event = undefined;
@@ -132,12 +137,15 @@ pub fn updateAndRender() !void {
         //particles._update_positions(&boundary);
         //particles.generic_collision_detection();
         
-        spawner.update(0.3, &particles);
+        spawner.update(0.08, &particles);
         try Solver.update_positions(&particles,&grid_collision, &boundary);
 
     }
 
-    try R.render_circles_texture_2d(texture_2D, .{ .X = particles.positions.x, .Y = particles.positions.y, .color = particles.colors }, flags.PARTICLE_RADIUS);
+    try R.render_circles_texture_2d(texture_2D, .{ .X = particles.positions.x,
+        .Y = particles.positions.y,
+        .color = particles.colors }
+        , flags.PARTICLE_RADIUS);
 
     try draw_fps();
     //try grid_collision.draw_line(&R);
