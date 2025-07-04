@@ -1,217 +1,146 @@
 const std = @import("std");
-const builtin = @import("builtin");
-
-const sdl = @import("zsdl2");
-const zsdl2_ttf = @import("zsdl2_ttf");
-//const zopengl = @import("zopengl");
-const Font = @import("zsdl2_ttf").Font;
-
-const ztracy = @import("ztracy");
-//const zm = @import("zmath");
-
-const Renderer = @import("renderer.zig").Renderer;
-const Texture2d = @import("textures.zig").texture2d;
-const Text = @import("render_text.zig").Text;
-
 const stdout = std.io.getStdOut().writer();
-const Particles = @import("logic/particles.zig").Particles;
-const Spawners = @import("logic/particles.zig").particle_spawner;
-const Solver = @import("logic/solver/solver.zig").Solver;
-const Flags = @import("logic/global.zig").Flags;
-const Boundary = @import("logic/solver/boundary.zig").Boundary;
-const Grid_collision_handler = @import("logic/collision_handler.zig").Grid_collision_handler;
+const sdl = @import("zsdl2");
 
-var reset: bool = false;
-var bg_flip: bool = false;
-var buffer: [13]u8 = [_]u8{0} ** 13;
-//1366x768
-var flags: Flags = .{
-    .WINDOW_WIDTH =720,
-    .WINDOW_HEIGHT = 704,
-    .TARGET_FPS = 60,
-    .PARTICLE_RADIUS = 2,
-    .MAX_PARTICLE_COUNT =8000, //Max = 8000
-    .DAMPING_FACTOR = 0.87, //Min 0.75,Max 1 for r=2
-    .PARTICLE_COLLISION_DAMPING = 0.85, //Min 0.85 Max 1 for r=2
-    .GRID_SIZE = 8,
-    .PAUSED = false,
-    .IF_GRAVITY = true,
-};
+const gui_file = @import("gui.zig");
+const Gui = gui_file.Gui;
 
-const colors = @import("colors.zig");
+// Core
+const core = @import("core.zig");
+const Particles = core.Particles;
+const Spawner = core.Spawner;
+const Solver = core.Solver;
+const SpatialHashGrid = core.SpatialHashGrid;
+
+// Global varibales
+var gui: Gui = undefined;
+var texture = gui_file.Texture_2D{ .texture = null };
+
+// With More variables like this this should be in the state struct
 var quit: bool = false;
-var elapsed_time_ms: f64 = undefined;
+var frame_rate: u64 = 60;
+var pause: bool = false;
+var next_frame: bool = false;
 
-var window: *sdl.Window = undefined;
-var R: Renderer = .{ .r = undefined };
-var texture_2D: Texture2d = .{ .texture = undefined };
-var text_texture: Texture2d = .{ .texture = undefined };
+const window_width: i32 = 720;
+const window_height: i32 = 640;
+const boundary_damping: f64 = 0.1;
+const particle_damping: f64 = 0.9;
+const g: f64 = 50;
 
 var particles: Particles = undefined;
-var spawner: Spawners = undefined;
-var boundary: Boundary = undefined;
-var grid_collision: Grid_collision_handler = undefined;
-var t: Text = undefined;
+var slover: Solver = undefined;
+var shg: SpatialHashGrid = undefined;
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-var allocator: std.mem.Allocator = undefined;
+fn init(title: ?[*:0]const u8, width: i32, height: i32) !void {
+    try sdl.init(.{
+        .audio = false,
+        .video = true,
+    });
+    try stdout.print("SDL Error:{any}\n", .{sdl.getError()});
 
-pub fn load_meida(r: *sdl.Renderer, file: [:0]const u8) !void {
-    try texture_2D.load_texture2d(r, file);
+    gui = try Gui.init(title, width, height);
+    try texture.loadTexture(gui.renderer, "assets/circle.png");
+
+    var rng = std.Random.DefaultPrng.init(@intCast(std.time.microTimestamp()));
+
+    const allocator = std.heap.c_allocator;
+
+    // Single Physics loop per frame with const velocity
+    // {
+    // generic ReleaseFast-> 5500
+    // single-threaded debug -> 20k
+    // single-threaded ReleaseFast- -> 35k
+    // }
+
+    // 8 Sub- Physics loop per frame with  acceleration
+    // // {
+    // SpatialHashGrid
+    // single-threaded debug -> 3k
+    // single-threaded ReleaseFast- -> 13k
+    // }
+
+    const particles_count: usize = 13_000;
+    const particles_radius = 2.0;
+    particles = try .init(allocator, particles_count, particles_radius);
+
+    const max: f64 = @floatFromInt(@min(height, width));
+    //const max: f64 = 100;
+    const min: f64 = -max;
+    try Spawner.spawnRandom(&particles, &rng, window_width, window_height, min, max);
+
+    slover = Solver.init(@floatFromInt(frame_rate), 8, g, boundary_damping, particle_damping);
+
+    const grid_size: f64 = 2.0 * particles_radius;
+    shg = try SpatialHashGrid.init(allocator, window_width, window_height, grid_size, particles_count);
 }
-
-pub fn init() !void {
-    try sdl.init(.{ .audio = false, .video = true });
-    window = try sdl.createWindow(
-        "zig-gamedev: sdl2_demo",
-        sdl.Window.pos_undefined,
-        sdl.Window.pos_undefined,
-        flags.WINDOW_WIDTH,
-        flags.WINDOW_HEIGHT,
-        .{ .allow_highdpi = true, .resizable = true },
-    );
-
-    try R.init(window, -1, .{ .accelerated = false });
-    //try load_meida(R.r,"resources/high_res_circle.png");
-    try load_meida(R.r, "resources/circle.png");
-    //try load_meida(R.r,"resources/hrc.png");
-    try zsdl2_ttf.init();
-    std.log.debug("sdl-version : {}", .{sdl.getVersion()});
-
-    allocator = gpa.allocator();
-
-    spawner = Spawners.create_spawner(.Flow, &flags);
-    particles = try Particles.init(allocator, flags.MAX_PARTICLE_COUNT, &flags);
-    try spawner.spawn(&particles);
-    t.init(&R);
-    try t.load_font("resources/fcnf.ttf", 21);
-    boundary = Boundary.create_boundry(.window, &flags);
-    grid_collision = try Grid_collision_handler.init_grid(allocator, &flags, &particles);
-}
-
-pub fn deinit() void {
+fn deinit() void {
     particles.deinit();
-    grid_collision.deinit_grid();
-    R.destroy();
-    window.destroy();
-    sdl.destroyTexture(texture_2D.texture.?);
-    defer _ = gpa.deinit();
-    sdl.quit();
-}
-
-pub fn make_time(text: [:0]const u8) [:0]const u8 {
-    return text;
-}
-
-pub fn updateAndRender() !void {
-    const updateAndRender_ztracy_zone = ztracy.ZoneNC(@src(), "updateAndRender", 0x0f_00_00);
-    defer updateAndRender_ztracy_zone.End();
-
-    var event: sdl.Event = undefined;
-
-    while (sdl.pollEvent(&event)) {
-        try handle_key_events(&event);
-    }
-
-    // Set Background
-    if (bg_flip == true) {
-        try R.clearBackground(colors.Raywhite);
-    } else {
-        try R.clearBackground(colors.Black);
-    }
-
-    // Dosen't work
-    if (reset == true) {
-        reset = !reset;
-        try spawner.spawn(&particles);
-        Grid_collision_handler.clear_all_array(&grid_collision);
-        flags.PAUSED = true;
-    }
-    if (flags.PAUSED != true) {
-        //boundary.check_boundary(&particles);
-        //particles._update_positions(&boundary);
-        //particles.generic_collision_detection();
-        
-        spawner.update(0.3, &particles);
-        try Solver.update_positions(&particles,&grid_collision, &boundary);
-
-    }
-
-    try R.render_circles_texture_2d(texture_2D, .{ .X = particles.positions.x, .Y = particles.positions.y, .color = particles.colors }, flags.PARTICLE_RADIUS);
-
-    try draw_fps();
-    //try grid_collision.draw_line(&R);
-    try draw_partticle_count();
-    R.r.present();
-}
-
-fn draw_fps() !void {
-    const tpf_raw = try std.fmt.bufPrint(&buffer, "{d} ms", .{elapsed_time_ms});
-    buffer[tpf_raw.len] = 0;
-
-    const tpf: [:0]const u8 = @ptrCast(&buffer);
-    try t.draw_text(((tpf)), .{
-        .x = 10,
-        .y = 5,
-    }, if (bg_flip == false) colors.Raywhite else colors.Black);
-}
-
-fn draw_partticle_count() !void {
-    const tpf_raw = try std.fmt.bufPrint(&buffer, "{}", .{particles.len});
-    buffer[tpf_raw.len] = 0;
-    const tpf: [:0]const u8 = @ptrCast(&buffer);
-    try t.draw_text(((tpf)), .{
-        .x = 170,
-        .y = 5,
-    }, if (bg_flip == false) colors.Raywhite else colors.Black);
-}
-
-pub fn shouldQuit() bool {
-    return quit;
+    shg.deinit();
+    gui.deinit();
 }
 
 pub fn main() !void {
-    try init();
+    const title = "Particle-Simulation";
+    try init(title, window_width, window_height);
     defer deinit();
-    const frame_time_ns: u64 = 1_000_000_000 / @as(u64, flags.TARGET_FPS); // Convert FPS to nanoseconds
-    var last_time = std.time.nanoTimestamp();
-
-    std.log.debug("SDL Error: {any}\n", .{sdl.getError()});
 
     while (!shouldQuit()) {
-        const while_loop_ztracy_zone = ztracy.ZoneNC(@src(), "while_loop", 0xff_00_00);
-        defer while_loop_ztracy_zone.End();
-
-        try updateAndRender(); // Update and render the frame
-
-        const current_time = std.time.nanoTimestamp();
-
-        const elapsed_time_ns: u64 = @intCast(current_time - last_time);
-        elapsed_time_ms = @as(f64, @floatFromInt(elapsed_time_ns)) / 1_000_000.0; // Convert ns to ms
-
-        //try stdout.print("Frame time: {d:.3} ms\n", .{elapsed_time_ms}); // Print frame time
-
-        if (elapsed_time_ns < frame_time_ns) {
-            const remaining_time_ns = frame_time_ns - elapsed_time_ns;
-            std.time.sleep(remaining_time_ns);
-        }
-
-        last_time = std.time.nanoTimestamp(); // Update last_time Before sleeping
+        const last_time_stamp_ns = std.time.nanoTimestamp();
+        try updateAndRender();
+        gui.maintainFPS(last_time_stamp_ns, frame_rate);
     }
 }
 
-pub fn handle_key_events(event: *sdl.Event) !void {
+fn updateAndRender() !void {
+    var event: sdl.Event = undefined;
+    while (sdl.pollEvent(&event)) {
+        handle_event(&event);
+    }
+    try gui.renderer.clearScreen(black);
+    try gui.renderer.sdl_renderer.clear();
+    const radius: f32 = @floatCast(particles.radius);
+    for (particles.positions, particles.colors) |pos, col| {
+        const x: f32 = @floatCast(pos[0]);
+        const y: f32 = @floatCast(pos[1]);
+        try gui.renderer.drawCircle(texture, radius, x, y, col);
+    }
+    if (!pause or next_frame) {
+        try slover.updatePhysics(&particles, @floatFromInt(window_width), @floatFromInt(window_height), &shg);
+        //slover._applyBoundary(&particles.positions, &particles.velocities, particles.radius, window_width, window_height);
+        next_frame = false;
+    }
+    gui.renderer.sdl_renderer.present();
+}
+
+fn handle_event(event: *sdl.Event) void {
     switch (event.type) {
         .quit => quit = true,
         .keydown => |_| {
-            if (event.key.keysym.sym == .escape) quit = true;
-            if (event.key.keysym.sym == .g) flags.IF_GRAVITY = !flags.IF_GRAVITY;
-            if (event.key.keysym.sym == .space) {
-                flags.PAUSED = !flags.PAUSED;
+            switch (event.key.keysym.sym) {
+                .escape => quit = !quit,
+                .space => pause = !pause,
+                .right => next_frame = true,
+                .g => slover.toggle_acc(),
+                else => {},
             }
-            if (event.key.keysym.sym == .r) reset = !reset;
-            if (event.key.keysym.sym == .b) bg_flip = !bg_flip;
         },
         else => {},
     }
 }
+fn shouldQuit() bool {
+    return quit;
+}
+// Colors
+const white = sdl.Color{
+    .r = 255,
+    .g = 255,
+    .b = 255,
+    .a = 255,
+};
+const black = sdl.Color{
+    .r = 0,
+    .g = 0,
+    .b = 0,
+    .a = 0,
+};
